@@ -116,7 +116,7 @@ pub fn markdown_img_url_editor(markdown_text: &str, converter: &Function, before
                 match callback.call0(&JsValue::NULL) {
                     Ok(maybe_promise) => {
                         if let Ok(p) = maybe_promise.dyn_into::<Promise>() {
-                            return p.then(&|_| get_replaced_wrap(parser, string_generators, markdown_text.len() + 128));
+                            return p.then(&Closure::wrap(Box::new(move |_| get_replaced_wrap(parser, string_generators, markdown_text.len() + 128))));
                         } else {
                             return Promise::reject(&TypeError::new(""));
                         }
