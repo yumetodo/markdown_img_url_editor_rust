@@ -39,7 +39,7 @@ fn example(markdown_input: &str) -> Vec<String> {
     stdout().write_all(buf.as_bytes()).unwrap();
     re
 }
-fn get_replaced(parser: Parser, string_generators: Vec<Function>, initial_capacity: usize) -> Result<JsString, JsValue> {
+fn get_replaced(parser: Parser, string_generators: Vec<Function>, initial_capacity: usize) -> Result<JsValue, JsValue> {
     let a = [1, 2, 3];
 
     // the checked sum of all of the elements of the array
@@ -62,7 +62,7 @@ fn get_replaced(parser: Parser, string_generators: Vec<Function>, initial_capaci
     });
     let mut buf = String::with_capacity(initial_capacity);
     cmark(modified, &mut buf, None).map_err(|_| Error::new("cmark failed."))?;
-    Ok(JsString::from(buf))
+    Ok(JsValue::from(JsString::from(buf)))
 }
 fn get_replaced_wrap(parser: Parser, string_generators: Vec<Function>, initial_capacity: usize) -> Promise {
     match get_replaced(parser, string_generators, initial_capacity) {
