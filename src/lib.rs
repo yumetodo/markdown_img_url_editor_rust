@@ -3,8 +3,11 @@ use pulldown_cmark::{ Options, Parser, Event, Tag, CowStr };
 use pulldown_cmark_to_cmark::fmt::cmark;
 use wasm_bindgen::prelude::*;
 use js_sys::{JsString, Function, Promise, Error, TypeError};
+use futures::future::Future;
+use futures::future::{self, TryFutureExt, FutureExt};
+use futures::compat::Future01CompatExt;
 use wasm_bindgen::JsCast;
-
+use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 #[allow(dead_code)]
 fn example(markdown_input: &str) -> Vec<String> {
@@ -109,7 +112,10 @@ pub fn markdown_img_url_editor(markdown_text: &str, converter: &Function, before
                 match callback.call0(&JsValue::NULL) {
                     Ok(maybe_promise) => {
                         if let Ok(p) = maybe_promise.dyn_into::<Promise>() {
-                            return p.then(&Closure::wrap(Box::new(move |_| get_replaced_wrap(parser, string_generators, markdown_text.len() + 128))));
+                            // return p.then(&Closure::wrap(Box::new(move |_| get_replaced_wrap(parser, string_generators, markdown_text.len() + 128))));
+                            let future = JsFuture::from(p).compat().then(|_| future::ready(get_replaced(parser, string_generators, markdown_text.len() + 128)));
+                            let ff = future.compat();
+                            return future_to_promise(ff);
                         } else {
                             return Promise::reject(&TypeError::new(""));
                         }
