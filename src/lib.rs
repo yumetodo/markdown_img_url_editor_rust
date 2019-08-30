@@ -1,10 +1,3 @@
-extern crate pulldown_cmark;
-extern crate pulldown_cmark_to_cmark;
-extern crate wasm_bindgen;
-extern crate wasm_bindgen_futures;
-extern crate futures;
-extern crate js_sys;
-
 use std::io::{stdout, Write};
 use pulldown_cmark::{ Options, Parser, Event, Tag, CowStr };
 use pulldown_cmark_to_cmark::fmt::cmark;
