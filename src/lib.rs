@@ -2,12 +2,8 @@ use std::io::{stdout, Write};
 use pulldown_cmark::{ Options, Parser, Event, Tag, CowStr };
 use pulldown_cmark_to_cmark::fmt::cmark;
 use wasm_bindgen::prelude::*;
-use js_sys::{JsString, Function, Promise, Error, TypeError};
-use futures::future::Future;
-use futures::future::{self, TryFutureExt, FutureExt};
-use futures::compat::Future01CompatExt;
+use js_sys::{JsString, Function, Error, TypeError};
 use wasm_bindgen::JsCast;
-use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 #[allow(dead_code)]
 fn example(markdown_input: &str) -> Vec<String> {
@@ -39,98 +35,78 @@ fn example(markdown_input: &str) -> Vec<String> {
     stdout().write_all(buf.as_bytes()).unwrap();
     re
 }
-fn get_replaced(parser: Parser, string_generators: Vec<Function>, initial_capacity: usize) -> Result<JsValue, JsValue> {
-    let a = [1, 2, 3];
-
-    // the checked sum of all of the elements of the array
-    let sum = a.iter().try_fold(0i8, |acc, &x| acc.checked_add(x));
-    let urls = string_generators.into_iter().map(
-        |g| g.call0(&JsValue::NULL).and_then(
-            |s| s.dyn_into::<JsString>().map_err(
-                |_| JsValue::from(TypeError::new("before_collect_callback (3rd argument: expected Function"))
-            )
-        )
-    ).collect::<Result<Vec<JsString>, JsValue>>();
-    let modified = parser.map(|e| {
-        match e {
-            Event::End(tag) => Event::End(match tag {
-                Tag::Image(link_type, _, title) => Tag::Image(link_type, CowStr::from("aaa"), title),
-                _ => tag,
-            }),
-            _ => e,
-        }
-    });
-    let mut buf = String::with_capacity(initial_capacity);
-    cmark(modified, &mut buf, None).map_err(|_| Error::new("cmark failed."))?;
-    Ok(JsValue::from(JsString::from(buf)))
-}
-fn get_replaced_wrap(parser: Parser, string_generators: Vec<Function>, initial_capacity: usize) -> Promise {
-    match get_replaced(parser, string_generators, initial_capacity) {
-        Ok(s) => Promise::resolve(&s),
-        Err(e) => Promise::reject(&e),
-    }
+#[wasm_bindgen]
+pub struct MarkdownImgUrlEditor {
+    markdown_text: String,
+    string_generators: Vec<Function>,
+    initial_capacity: usize,
 }
 #[wasm_bindgen]
-pub fn markdown_img_url_editor(markdown_text: &str, converter: &Function, before_collect_callback: JsValue) -> Promise {
-    let parser = Parser::new_ext(markdown_text, Options::empty());
-    let mut string_generators: Vec<Function> = Vec::new();
-    for event in parser.clone() {
-        match event {
-            Event::Start(Tag::Image(_, u, t)) => {
-                //TODO: thisは本当にnullでいいのか
-                let this = JsValue::NULL;
-                let alt = JsValue::from(t.into_string());
-                let url = JsValue::from(u.into_string());
-                let generator = converter.call2(&this, &alt, &url);
-                match generator {
-                    Ok(maybe_g) => {
-                        match maybe_g.dyn_into::<Function>() {
-                            Ok(g) => {
-                                string_generators.push(g);
-                            },
-                            Err(_) => {
-                                return Promise::reject(&JsValue::from(TypeError::new("`converter` (2nd argument): expected Function")));
+impl MarkdownImgUrlEditor {
+    pub fn new(text: String, converter: &Function) -> Result<MarkdownImgUrlEditor, JsValue> {
+        let markdown_text = text.clone();
+        let parser = Parser::new_ext(&markdown_text, Options::empty());
+        let mut string_generators: Vec<Function> = Vec::new();
+        for event in parser.clone() {
+            match event {
+                Event::Start(Tag::Image(_, u, t)) => {
+                    let this = JsValue::NULL;
+                    let alt = JsValue::from(t.into_string());
+                    let url = JsValue::from(u.into_string());
+                    let generator = converter.call2(&this, &alt, &url);
+                    match generator {
+                        Ok(maybe_g) => {
+                            match maybe_g.dyn_into::<Function>() {
+                                Ok(g) => {
+                                    string_generators.push(g);
+                                },
+                                Err(_) => {
+                                    return Err(JsValue::from(TypeError::new("`converter` (2nd argument): expected Function")));
+                                }
                             }
+                        },
+                        Err(m) => {
+                            return Err(m);
                         }
-                    },
-                    Err(m) => {
-                        return Promise::reject(&m);
                     }
                 }
-            }
-            _ => ()
-        }
-    }
-    if string_generators.is_empty() {
-        return Promise::resolve(&JsValue::from(markdown_text));
-    }
-    if before_collect_callback.is_null() || before_collect_callback.is_undefined() {
-        return get_replaced_wrap(parser, string_generators, markdown_text.len() + 128)
-    } else {
-        match before_collect_callback.dyn_into::<Function>() {
-            Ok(callback) => {
-                match callback.call0(&JsValue::NULL) {
-                    Ok(maybe_promise) => {
-                        if let Ok(p) = maybe_promise.dyn_into::<Promise>() {
-                            // return p.then(&Closure::wrap(Box::new(move |_| get_replaced_wrap(parser, string_generators, markdown_text.len() + 128))));
-                            let future = JsFuture::from(p).compat().then(|_| future::ready(get_replaced(parser, string_generators, markdown_text.len() + 128)));
-                            let ff = future.compat();
-                            return future_to_promise(ff);
-                        } else {
-                            return Promise::reject(&TypeError::new(""));
-                        }
-                    },
-                    Err(m) => {
-                        return Promise::reject(&m);
-                    }
-                }
-            },
-            Err(_) => {
-                return Promise::reject(&TypeError::new("before_collect_callback (3rd argument: expected Function"));
+                _ => ()
             }
         }
+        Ok(MarkdownImgUrlEditor {
+            markdown_text,
+            string_generators,
+            initial_capacity: text.len() + 128,
+        })
+    }
+    pub fn replace(&mut self) -> Result<String, JsValue> {
+        if self.string_generators.is_empty() {
+            return Ok(self.markdown_text.clone());
+        }
+        let urls = self.string_generators.clone().into_iter().map(
+            |g| g.call0(&JsValue::NULL).and_then(
+                |s| s.dyn_into::<JsString>().map(|s| String::from(s)).map_err(
+                    |_| JsValue::from(TypeError::new("before_collect_callback (3rd argument: expected Function"))
+                )
+            )
+        ).collect::<Result<Vec<String>, JsValue>>()?;
+        let parser = Parser::new_ext(&self.markdown_text, Options::empty());
+        let mut ite = urls.iter();
+        let modified = parser.map(|e| {
+            match e {
+                Event::End(tag) => Event::End(match tag {
+                    Tag::Image(link_type, _, title) => Tag::Image(link_type, CowStr::from(ite.next().unwrap().clone()), title),
+                    _ => tag,
+                }),
+                _ => e,
+            }
+        });
+        let mut buf = String::with_capacity(self.initial_capacity);
+        cmark(modified, &mut buf, None).map_err(|_| Error::new("cmark failed."))?;
+        Ok(buf)
     }
 }
+
 #[cfg(test)]
 mod tests {
     #[test]
