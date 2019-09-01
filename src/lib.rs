@@ -24,18 +24,40 @@ fn example(markdown_input: &str) -> Vec<String> {
             _ => ()
         }
     }
-    let modified = parser.map(|e| {
-        match e {
-            Event::End(tag) => Event::End(match tag {
-                Tag::Image(link_type, _, title) => Tag::Image(link_type, CowStr::from("aaa"), title),
-                _ => tag,
-            }),
-            _ => e,
+    // let modified = parser.map(|e| {
+    //     match e {
+    //         Event::End(tag) => Event::End(match tag {
+    //             Tag::Image(link_type, _, title) => Tag::Image(link_type, CowStr::from("aaa"), title),
+    //             _ => tag,
+    //         }),
+    //         _ => e,
+    //     }
+    // });
+    // let mut buf = String::with_capacity(markdown_input.len() + 128);
+    // cmark(modified, &mut buf, None).unwrap();
+    // stdout().write_all(buf.as_bytes()).unwrap();
+    re
+}
+#[allow(dead_code)]
+fn example2(markdown_input: &str) -> Vec<String> {
+    // Set up options and parser. Strikethroughs are not part of the CommonMark standard
+    // and we therefore must enable it explicitly.
+    let mut opts = Options::empty();
+    opts.insert(Options::ENABLE_TABLES);
+    opts.insert(Options::ENABLE_FOOTNOTES);
+    opts.insert(Options::ENABLE_STRIKETHROUGH);
+    opts.insert(Options::ENABLE_TASKLISTS);
+    let parser = Parser::new_ext(markdown_input, opts);
+    let mut re: Vec<String> = Vec::new();
+    for event in parser.clone() {
+        match event {
+            Event::End(Tag::Image(link_type, url, alt)) => {
+                println!("{:?}, {:?}, {:?}", link_type, url, alt);
+                re.push(alt.into_string());
+            }
+            _ => ()
         }
-    });
-    let mut buf = String::with_capacity(markdown_input.len() + 128);
-    cmark(modified, &mut buf, None).unwrap();
-    stdout().write_all(buf.as_bytes()).unwrap();
+    }
     re
 }
 #[wasm_bindgen]
@@ -132,6 +154,28 @@ mod tests {
 ";
         let re = super::example(markdown_input);
         let test = re.iter().eq(&["1.png", "D3T3cG6U0AAd0Zn.jpg", "D5iuwp0W4AEm1bi.jpg", "D5jwkn7XsAABJvV.jpg", "IR.jpg"]) ;
+        assert!(test);
+    }
+    #[test]
+    fn example2() {
+        let markdown_input = r"# arikitari
+
+![1](1.png)
+
+![cpp](D3T3cG6U0AAd0Zn.jpg)
+
+![atgtheiwa1](D5iuwp0W4AEm1bi.jpg)
+
+![atgtheiwa2](D5jwkn7XsAABJvV.jpg)
+
+![IR](IR.jpg)
+```markdown
+![2][2.png]
+```
+";
+        let re = super::example2(markdown_input);
+        print!("{:?}", re);
+        let test = re.iter().eq(&["1", "cpp", "atgtheiwa1", "atgtheiwa2", "IR"]) ;
         assert!(test);
     }
 }
