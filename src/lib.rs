@@ -43,6 +43,7 @@ pub struct MarkdownImgUrlEditor {
 }
 #[wasm_bindgen]
 impl MarkdownImgUrlEditor {
+    #[wasm_bindgen(constructor)]
     pub fn new(text: String, converter: &Function) -> Result<MarkdownImgUrlEditor, JsValue> {
         let markdown_text = text.clone();
         let parser = Parser::new_ext(&markdown_text, Options::empty());
