@@ -9,9 +9,12 @@ use wasm_bindgen::JsCast;
 fn example(markdown_input: &str) -> Vec<String> {
     // Set up options and parser. Strikethroughs are not part of the CommonMark standard
     // and we therefore must enable it explicitly.
-    let mut options = Options::empty();
-    options.insert(Options::ENABLE_STRIKETHROUGH);
-    let parser = Parser::new_ext(markdown_input, options);
+    let mut opts = Options::empty();
+    opts.insert(Options::ENABLE_TABLES);
+    opts.insert(Options::ENABLE_FOOTNOTES);
+    opts.insert(Options::ENABLE_STRIKETHROUGH);
+    opts.insert(Options::ENABLE_TASKLISTS);
+    let parser = Parser::new_ext(markdown_input, opts);
     let mut re: Vec<String> = Vec::new();
     for event in parser.clone() {
         match event {
