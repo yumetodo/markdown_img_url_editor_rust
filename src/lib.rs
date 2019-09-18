@@ -23,18 +23,6 @@ fn example(markdown_input: &str) -> Vec<String> {
             _ => (),
         }
     }
-    // let modified = parser.map(|e| {
-    //     match e {
-    //         Event::End(tag) => Event::End(match tag {
-    //             Tag::Image(link_type, _, title) => Tag::Image(link_type, CowStr::from("aaa"), title),
-    //             _ => tag,
-    //         }),
-    //         _ => e,
-    //     }
-    // });
-    // let mut buf = String::with_capacity(markdown_input.len() + 128);
-    // cmark(modified, &mut buf, None).unwrap();
-    // stdout().write_all(buf.as_bytes()).unwrap();
     re
 }
 #[allow(dead_code)]

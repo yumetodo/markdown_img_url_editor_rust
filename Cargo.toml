@@ -3,6 +3,9 @@ name = "markdown_img_url_editor_rust"
 version = "0.1.0"
 authors = ["yumetodo <yume-wikijp@live.jp>"]
 edition = "2018"
+description = "![alt](I want to edit here)"
+repository = "https://github.com/yumetodo/markdown_img_url_editor_rust.git"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

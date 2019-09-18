@@ -1,0 +1,66 @@
+version: 2.1
+executors:
+    default:
+        docker:
+            - image: yumetodo/buildcontainers:rust-latest-wasm-lts
+        working_directory: ~/repo
+commands:
+    tool_install:
+        steps:
+            - run: npm i -g can-npm-publish
+    cargo_restore_cache:
+        steps:
+            - run:
+                name: Calculate dependencies
+                command: cargo generate-lockfile
+                working_directory: markdown_img_url_editor_rust
+            - restore_cache:
+                keys:
+                  - v4-cargo-cache-{{ arch }}-{{ checksum "Cargo.lock" }}
+    cargo_save_cache:
+        steps:
+            - save_cache:
+                paths:
+                  - /usr/local/cargo/registry
+                  - target/debug/.fingerprint
+                  - target/debug/build
+                  - target/debug/deps
+                  - target/release/.fingerprint
+                  - target/release/build
+                  - target/release/deps
+                key: v4-cargo-cache-{{ arch }}-{{ checksum "Cargo.lock" }}
+jobs:
+    test:
+        executor: default
+        steps:
+            - checkout
+            - cargo_restore_cache
+            - run: cargo test
+            - run: wasm-pack build
+            - cargo_save_cache
+    publish:
+        executor: default
+        steps:
+            - tool_install
+            - checkout
+            - run: wasm-pack build --release
+            - run: echo //registry.npmjs.org/:_authToken=${NPM_TOKEN} > .npmrc
+            - run:
+                command: |
+                    if can-npm-publish --verbose pkg; then
+                        wasm-pack publish
+                    else
+                        echo "publish skipped"
+                    fi
+workflows:
+    version: 2
+    publishflow:
+        jobs:
+            - test
+            - publish:
+                context: npm
+                requires:
+                    - test
+                filters:
+                    tags:
+                        only: /^v.*/
