@@ -44,7 +44,7 @@ jobs:
             - tool_install
             - checkout
             - run: wasm-pack build --release
-            - run: echo //registry.npmjs.org/:_authToken=${NPM_TOKEN} > .npmrc
+            - run: echo //registry.npmjs.org/:_authToken=${NPM_TOKEN} > ~/.npmrc
             - run:
                 command: |
                     if can-npm-publish --verbose pkg; then
