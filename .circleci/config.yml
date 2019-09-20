@@ -43,7 +43,7 @@ jobs:
         steps:
             - tool_install
             - checkout
-            - run: wasm-pack build --release
+            - run: wasm-pack build --release --target nodejs
             - run: echo //registry.npmjs.org/:_authToken=${NPM_TOKEN} > ~/.npmrc
             - run:
                 command: |
