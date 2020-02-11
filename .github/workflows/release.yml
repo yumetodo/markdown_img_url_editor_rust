@@ -1,0 +1,42 @@
+name: Test and Release
+
+on:
+  [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Cache cargo dependencies
+      uses: actions/cache@v1
+      env:
+        cache-name: cache-cargo-dependencies
+      with:
+        path: /usr/local/cargo/registry
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-build-
+          ${{ runner.os }}-
+    - name: Run tests
+      run: cargo test --verbose
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: 12.x
+        registry-url: 'https://registry.npmjs.org'
+    - name: install wasm-pack
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+    - run: wasm-pack build --release --target nodejs
+    - name: wasm-pack publish when possible
+      run: |
+        if npx can-npm-publish --verbose pkg; then
+            wasm-pack publish
+        else
+            echo "publish skipped"
+        fi
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
