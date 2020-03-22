@@ -12,8 +12,8 @@ license = "MIT"
 [dependencies]
 pulldown-cmark = "0.6.1"
 pulldown-cmark-to-cmark = "2.0.1"
-wasm-bindgen = "0.2.58"
-js-sys = "0.3.35"
+wasm-bindgen = "0.2.59"
+js-sys = "0.3.36"
 
 [lib]
 crate-type = ["cdylib"]
