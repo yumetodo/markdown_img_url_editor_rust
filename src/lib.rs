@@ -13,11 +13,18 @@ fn example(markdown_input: &str) -> Vec<String> {
     opts.insert(Options::ENABLE_FOOTNOTES);
     opts.insert(Options::ENABLE_STRIKETHROUGH);
     opts.insert(Options::ENABLE_TASKLISTS);
-    let parser = Parser::new_ext(markdown_input, opts);
+    let parser = Parser::new_ext(markdown_input, opts).into_offset_iter();
     let mut re: Vec<String> = Vec::new();
-    for event in parser.clone() {
+    for (event, range) in parser {
         match event {
-            Event::Start(Tag::Image(_, url, _)) => {
+            Event::End(Tag::Image(_, url, _)) => {
+                let all = &markdown_input[range.start..range.end];
+                let i = all.rfind(&url.clone().into_string()).unwrap();
+                let url_part = &all[i..(i + url.len())];
+                println!(
+                    "start: {}, end: {}, s={}, part={}",
+                    range.start, range.end, all, url_part
+                );
                 re.push(url.into_string());
             }
             _ => (),
