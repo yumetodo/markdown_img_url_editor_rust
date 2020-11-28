@@ -1,6 +1,6 @@
-use js_sys::{Error, Function, JsString, TypeError};
-use pulldown_cmark::{CowStr, Event, Options, Parser, Tag};
-use pulldown_cmark_to_cmark::fmt::cmark;
+use js_sys::{Function, JsString, RangeError, TypeError};
+use pulldown_cmark::{Event, Options, Parser, Tag};
+use std::ops::Range;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
@@ -75,7 +75,14 @@ fn example2(markdown_input: &str) -> Vec<String> {
 pub struct MarkdownImgUrlEditor {
     markdown_text: String,
     string_generators: Vec<Function>,
-    initial_capacity: usize,
+    url_ranges: Vec<Range<usize>>,
+    without_replace_part_len: usize,
+}
+
+fn calc_url_range<'a>(markdown_text:&'a str, url: &'a str, range: Range<usize>) -> Range<usize> {
+    let all = &markdown_text[range.start..range.end];
+    let i = all.rfind(url).unwrap() + range.start;
+    i..(i + url.len())
 }
 #[wasm_bindgen]
 impl MarkdownImgUrlEditor {
@@ -89,11 +96,14 @@ impl MarkdownImgUrlEditor {
         opts.insert(Options::ENABLE_FOOTNOTES);
         opts.insert(Options::ENABLE_STRIKETHROUGH);
         opts.insert(Options::ENABLE_TASKLISTS);
-        let parser = Parser::new_ext(&markdown_text, opts);
+        let parser = Parser::new_ext(&markdown_text, opts).into_offset_iter();
         let mut string_generators: Vec<Function> = Vec::new();
+        let mut url_ranges: Vec<Range<usize>> = Vec::new();
         let mut in_image = false;
         let mut alt: Option<String> = None;
-        for event in parser {
+        let mut prev_url_end: usize = 0;
+        let mut without_replace_part_len: usize = 0;
+        for (event, range) in parser {
             match event {
                 Event::Start(Tag::Image(_, _, _)) => {
                     in_image = true;
@@ -111,13 +121,23 @@ impl MarkdownImgUrlEditor {
                     in_image = false;
                     let mut a: Option<String> = None;
                     std::mem::swap(&mut alt, &mut a);
+                    let url = u.into_string();
+                    let url_range = calc_url_range(&markdown_text, &url, range);
                     let alt = JsValue::from(a.unwrap());
-                    let url = JsValue::from(u.into_string());
-                    let generator = converter.call2(&JsValue::NULL, &alt, &url);
+                    let generator = converter.call2(&JsValue::NULL, &alt, &JsValue::from(url));
                     match generator {
                         Ok(maybe_g) => match maybe_g.dyn_into::<Function>() {
                             Ok(g) => {
                                 string_generators.push(g);
+                                if url_range.start < prev_url_end {
+                                    return Err(JsValue::from(RangeError::new(&format!(
+                                        "url_range.start: {}, prev_url_end: {}",
+                                        url_range.start, prev_url_end
+                                    ))));
+                                }
+                                without_replace_part_len += url_range.start - prev_url_end;
+                                prev_url_end = url_range.end;
+                                url_ranges.push(url_range);
                             }
                             Err(_) => {
                                 return Err(JsValue::from(TypeError::new(
@@ -133,10 +153,12 @@ impl MarkdownImgUrlEditor {
                 _ => (),
             }
         }
+        without_replace_part_len += markdown_text.len() - prev_url_end;
         Ok(MarkdownImgUrlEditor {
             markdown_text,
             string_generators,
-            initial_capacity: text.len() + 128,
+            url_ranges,
+            without_replace_part_len,
         })
     }
     pub fn replace(&mut self) -> Result<String, JsValue> {
@@ -159,19 +181,16 @@ impl MarkdownImgUrlEditor {
                 })
             })
             .collect::<Result<Vec<String>, JsValue>>()?;
-        let parser = Parser::new_ext(&self.markdown_text, Options::empty());
-        let mut ite = urls.iter();
-        let modified = parser.map(|e| match e {
-            Event::End(tag) => Event::End(match tag {
-                Tag::Image(link_type, _, title) => {
-                    Tag::Image(link_type, CowStr::from(ite.next().unwrap().clone()), title)
-                }
-                _ => tag,
-            }),
-            _ => e,
-        });
-        let mut buf = String::with_capacity(self.initial_capacity);
-        cmark(modified, &mut buf, None).map_err(|_| Error::new("cmark failed."))?;
+        let mut buf = String::with_capacity(
+            self.without_replace_part_len + urls.iter().map(|e| e.len()).sum::<usize>(),
+        );
+        let mut prev_url_end = 0;
+        for (r, url) in self.url_ranges.iter().zip(urls.iter()) {
+            buf += &self.markdown_text[prev_url_end..r.start];
+            buf += url;
+            prev_url_end = r.end;
+        }
+        buf += &self.markdown_text[prev_url_end..];
         Ok(buf)
     }
 }
