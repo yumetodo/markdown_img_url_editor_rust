@@ -3,6 +3,7 @@ use pulldown_cmark::{Event, Options, Parser, Tag};
 use std::ops::Range;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+extern crate console_error_panic_hook;
 
 #[allow(dead_code)]
 fn example(markdown_input: &str) -> Vec<String> {
@@ -88,6 +89,7 @@ fn calc_url_range<'a>(markdown_text:&'a str, url: &'a str, range: Range<usize>) 
 impl MarkdownImgUrlEditor {
     #[wasm_bindgen(constructor)]
     pub fn new(text: String, converter: &Function) -> Result<MarkdownImgUrlEditor, JsValue> {
+        console_error_panic_hook::set_once();
         let markdown_text = text.clone();
         // Set up options and parser. Strikethroughs are not part of the CommonMark standard
         // and we therefore must enable it explicitly.
