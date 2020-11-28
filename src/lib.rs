@@ -175,7 +175,7 @@ mod tests {
     fn example() {
         let markdown_input = r"# arikitari
 
-![1](1.png)
+![🍣🍺1](1.png)
 
 ![cpp](D3T3cG6U0AAd0Zn.jpg)
 
