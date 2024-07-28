@@ -1,5 +1,5 @@
 use js_sys::{Function, JsString, RangeError, TypeError};
-use pulldown_cmark::{Event, Options, Parser, Tag};
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use std::ops::Range;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -18,15 +18,15 @@ fn example(markdown_input: &str) -> Vec<String> {
     let mut re: Vec<String> = Vec::new();
     for (event, range) in parser {
         match event {
-            Event::End(Tag::Image(_, url, _)) => {
+            Event::Start(Tag::Image{dest_url, ..}) => {
                 let all = &markdown_input[range.start..range.end];
-                let i = all.rfind(&url.clone().into_string()).unwrap();
-                let url_part = &all[i..(i + url.len())];
+                let i = all.rfind(&dest_url.clone().into_string()).unwrap();
+                let url_part = &all[i..(i + dest_url.len())];
                 println!(
                     "start: {}, end: {}, s={}, part={}",
                     range.start, range.end, all, url_part
                 );
-                re.push(url.into_string());
+                re.push(dest_url.into_string());
             }
             _ => (),
         }
@@ -44,28 +44,28 @@ fn example2(markdown_input: &str) -> Vec<String> {
     opts.insert(Options::ENABLE_TASKLISTS);
     let parser = Parser::new_ext(markdown_input, opts);
     let mut re: Vec<String> = Vec::new();
-    let mut in_image = false;
+    let mut url: Option<String> = None;
     let mut alt: Option<String> = None;
     for event in parser {
         match event {
-            Event::Start(Tag::Image(_, _, _)) => {
-                in_image = true;
+            Event::Start(Tag::Image{dest_url, ..}) => {
+                url = Some(dest_url.into_string());
             }
             Event::Text(t) => {
                 if alt.is_some() {
                     let mut tmp = alt.unwrap();
                     tmp.push(' ');
                     alt = Some(tmp + &t.into_string());
-                } else if in_image {
+                } else if url.is_some() {
                     alt = Some(t.into_string());
                 }
             }
-            Event::End(Tag::Image(link_type, u, _)) => {
-                in_image = false;
+            Event::End(TagEnd::Image) => {
                 let mut a: Option<String> = None;
                 std::mem::swap(&mut alt, &mut a);
-                println!("{:?}, {:?}, {:?}", link_type, u, a);
+                println!("{:?}, {:?}", url, a);
                 re.push(a.unwrap());
+                url = None;
             }
             _ => (),
         }
@@ -101,29 +101,29 @@ impl MarkdownImgUrlEditor {
         let parser = Parser::new_ext(&markdown_text, opts).into_offset_iter();
         let mut string_generators: Vec<Function> = Vec::new();
         let mut url_ranges: Vec<Range<usize>> = Vec::new();
-        let mut in_image = false;
+        let mut u: Option<String> = None;
         let mut alt: Option<String> = None;
         let mut prev_url_end: usize = 0;
         let mut without_replace_part_len: usize = 0;
         for (event, range) in parser {
             match event {
-                Event::Start(Tag::Image(_, _, _)) => {
-                    in_image = true;
+                Event::Start(Tag::Image{dest_url, ..}) => {
+                    u = Some(dest_url.into_string());
                 }
                 Event::Text(t) => {
                     if alt.is_some() {
                         let mut tmp = alt.unwrap();
                         tmp.push(' ');
                         alt = Some(tmp + &t.into_string());
-                    } else if in_image {
+                    } else if u.is_some() {
                         alt = Some(t.into_string());
                     }
                 }
-                Event::End(Tag::Image(_, u, _)) => {
-                    in_image = false;
+                Event::End(TagEnd::Image) => {
                     let mut a: Option<String> = None;
                     std::mem::swap(&mut alt, &mut a);
-                    let url = u.into_string();
+                    let url = u.ok_or(JsError::new("missing url, logic error"))?;
+                    u = None;
                     let url_range = calc_url_range(&markdown_text, &url, range);
                     let alt = JsValue::from(a.unwrap());
                     let generator = converter.call2(&JsValue::NULL, &alt, &JsValue::from(url));
