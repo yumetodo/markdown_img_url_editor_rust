@@ -1,6 +1,6 @@
 [package]
 name = "markdown_img_url_editor_rust"
-version = "1.0.4"
+version = "1.0.5"
 authors = ["yumetodo <yume-wikijp@live.jp>"]
 edition = "2018"
 description = "![alt](I want to edit here)"
